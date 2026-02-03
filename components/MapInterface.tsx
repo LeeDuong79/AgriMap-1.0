@@ -20,8 +20,10 @@ const POPULAR_SUGGESTIONS = ['Bưởi Da Xanh', 'Sầu riêng Ri6', 'Xoài Cát 
 
 const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = false, onSearch, initialSearchQuery = '' }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  
   const [selectedProduct, setSelectedProduct] = useState<FarmProduct | null>(null);
   const [localQuery, setLocalQuery] = useState(initialSearchQuery);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -38,7 +40,26 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
       });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapRef.current);
       L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
+
+      // Đóng gợi ý khi tương tác với bản đồ
+      mapRef.current.on('mousedown', () => {
+        setShowSuggestions(false);
+      });
     }
+  }, []);
+
+  // Handle Click Outside Search Container
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // Handle Markers and Fly-to animations
@@ -65,6 +86,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
         .on('click', () => {
           setSelectedProduct(p);
           setIsSaved(false); 
+          setShowSuggestions(false);
           mapRef.current?.flyTo([p.location.lat, p.location.lng], 15, {
             duration: 1.5,
             easeLinearity: 0.25
@@ -74,10 +96,8 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
     });
     markersRef.current = newMarkers;
 
-    // Fly-to logic when search changes
     if (localQuery.trim().length > 0) {
       if (products.length === 1) {
-        // If only one product found, fly directly to it and select it
         const p = products[0];
         setSelectedProduct(p);
         mapRef.current.flyTo([p.location.lat, p.location.lng], 14, {
@@ -85,7 +105,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
           easeLinearity: 0.2
         });
       } else if (products.length > 1) {
-        // If multiple products, check for an exact name match to fly to
         const exactMatch = products.find(p => p.name.toLowerCase() === localQuery.toLowerCase());
         if (exactMatch) {
           setSelectedProduct(exactMatch);
@@ -94,17 +113,15 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
             easeLinearity: 0.2
           });
         } else {
-          // Otherwise fit all results in view
           const group = L.featureGroup(newMarkers);
           mapRef.current.fitBounds(group.getBounds().pad(0.3), { animate: true, duration: 1.5 });
         }
       }
     } else if (newMarkers.length > 0) {
-      // General view fitting when no specific search
       const group = L.featureGroup(newMarkers);
       mapRef.current.fitBounds(group.getBounds().pad(0.1), { animate: true, duration: 1.0 });
     }
-  }, [products]); // Remove localQuery from dependencies to avoid loop if products don't change
+  }, [products]);
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -117,7 +134,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
     setLocalQuery(q);
     onSearch?.(q);
     setShowSuggestions(false);
-    // The useEffect will handle the flyTo based on the new products list
   };
 
   const openInGoogleMaps = (lat: number, lng: number) => {
@@ -128,9 +144,9 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
     <div className="relative w-full h-full font-sans overflow-hidden">
       <div ref={mapContainerRef} className="w-full h-full z-0" />
       
-      {/* 1. Header Search Bar (Always top) */}
+      {/* 1. Header Search Bar */}
       <div className="absolute top-6 left-6 right-6 z-[2000] flex justify-center">
-        <div className="w-full max-w-xl relative">
+        <div ref={searchContainerRef} className="w-full max-w-xl relative">
           <form 
             onSubmit={handleSearchSubmit}
             className="bg-white border-[4px] border-black rounded-[2rem] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center p-1.5 transition-all focus-within:translate-x-1 focus-within:translate-y-1 focus-within:shadow-none"
@@ -158,6 +174,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
             </button>
           </form>
 
+          {/* Suggestions Dropdown */}
           {showSuggestions && !localQuery && (
             <div className="absolute top-full mt-4 left-0 right-0 bg-white border-4 border-black rounded-[2rem] shadow-2xl p-6 animate-in slide-in-from-top-4 duration-300">
               <div className="flex items-center gap-2 mb-4 text-green-700">
@@ -166,7 +183,11 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
               </div>
               <div className="flex flex-wrap gap-2">
                 {POPULAR_SUGGESTIONS.map((s) => (
-                  <button key={s} onClick={() => handleSuggestionClick(s)} className="px-4 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-black text-black hover:border-black transition-all">
+                  <button 
+                    key={s} 
+                    onClick={() => handleSuggestionClick(s)} 
+                    className="px-4 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-black text-black hover:border-black hover:bg-white transition-all active:scale-95"
+                  >
                     {s}
                   </button>
                 ))}
@@ -179,7 +200,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
       {/* 2. Side Panel / Place Details */}
       {selectedProduct && (
         <div className="absolute top-0 bottom-0 left-0 w-full md:w-[450px] bg-white border-r-4 border-black z-[3000] shadow-2xl animate-in slide-in-from-left duration-500 overflow-y-auto no-scrollbar">
-          {/* Header Image */}
           <div className="relative h-72">
             <img src={selectedProduct.images.product[0]} className="w-full h-full object-cover" alt={selectedProduct.name} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -201,7 +221,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
             </div>
           </div>
 
-          {/* Place Body */}
           <div className="p-8">
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-1.5">
@@ -296,24 +315,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ products, isFarmerView = fa
                <div className="mt-4 flex items-center justify-between text-xs font-black text-green-700 uppercase">
                  <span>Chủ vườn: {selectedProduct.farmerName}</span>
                  <ExternalLink size={14} />
-               </div>
-            </div>
-
-            <div className="mt-8 pt-8 border-t-2 border-slate-100">
-               <div className="flex items-center justify-between mb-4">
-                 <h4 className="text-xs font-black text-black uppercase tracking-widest">Đánh giá cộng đồng</h4>
-                 <button className="text-blue-700 text-xs font-black uppercase underline">Xem tất cả</button>
-               </div>
-               <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center text-white shrink-0">
-                      <Star size={18} fill="white" />
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-2xl flex-1 border border-slate-100">
-                       <p className="text-xs font-bold text-slate-600 leading-tight">"Nông sản rất tươi, HTX hỗ trợ nhiệt tình. Có mã PUC nên cực kỳ yên tâm khi mua sỉ."</p>
-                       <p className="text-[10px] font-black text-black mt-2 uppercase tracking-widest">- Thương lái Miền Tây</p>
-                    </div>
-                  </div>
                </div>
             </div>
 
