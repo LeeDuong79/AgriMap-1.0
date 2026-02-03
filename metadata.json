@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Copy of Copy of Bản đồ Nông sản Việt Nam",
+  "description": "Nền tảng chuyển đổi số kết nối nông hộ, người tiêu dùng và cơ quan quản lý thông qua bản đồ tương tác, truy xuất nguồn gốc và quản lý chứng chỉ nông nghiệp xanh.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
